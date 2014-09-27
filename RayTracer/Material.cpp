@@ -17,6 +17,10 @@ namespace RayTracer
     : color(color)
     {}
     
+    Material::Material(const Material &copy)
+    : color(copy.color)
+    {}
+    
     Material::~Material() {}
     
     /*Eigen::Vector3d Material::GetReflection(const Eigen::Vector3d &relativeRayHitPos,

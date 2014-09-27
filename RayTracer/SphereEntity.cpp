@@ -6,8 +6,12 @@ namespace RayTracer
 {
   namespace Tracing
   {
-    SphereEntity::SphereEntity(const Eigen::Vector3d &pos, double radius, Material &mat)
-      : SceneEntity(pos, Eigen::Vector3d(), mat), radius(radius)
+    SphereEntity::SphereEntity(const Eigen::Vector3d &pos, double radius, MaterialRef &&mat)
+    : SceneEntity(pos, Eigen::Vector3d(), std::move(mat)), radius(radius)
+    {}
+    
+    SphereEntity::SphereEntity(const SphereEntity &copy)
+      : SphereEntity(copy.pos, copy.radius, MaterialRef(new Material(*copy.mat)))
     {}
 
     Eigen::Vector3d SphereEntity::GetSurfaceNormalAt(const Eigen::Vector3d &point)

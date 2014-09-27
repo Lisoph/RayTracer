@@ -11,7 +11,8 @@ namespace RayTracer
     protected:
       double radius;
     public:
-      SphereEntity(const Eigen::Vector3d &pos, double radius, Material &mat);
+      SphereEntity(const Eigen::Vector3d &pos, double radius, MaterialRef &&mat);
+      SphereEntity(const SphereEntity &copy);
     public:
       Eigen::Vector3d GetSurfaceNormalAt(const Eigen::Vector3d &point) override;
 

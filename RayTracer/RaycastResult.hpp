@@ -21,11 +21,12 @@ namespace RayTracer
       Ray &NextCastRay() { return nextCastRay; }
 
       const Eigen::Vector3f &Color() const { return color; }
+      Eigen::Vector3f &Color() { return color; }
     public:
       RaycastResult();
       RaycastResult(const Ray &nextCastRay, const Eigen::Vector3f &color);
     public:
-      static const RaycastResult &NoHit();
+      static const RaycastResult NoHit();
 
 
       double intensity = 0.0;

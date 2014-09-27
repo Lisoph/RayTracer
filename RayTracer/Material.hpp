@@ -16,6 +16,7 @@ namespace RayTracer
     public:
       Material();
       Material(const Eigen::Vector3f &color);
+      Material(const Material &copy);
       virtual ~Material();
       
       static Material &Instance()

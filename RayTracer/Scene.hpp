@@ -2,6 +2,7 @@
 
 #include <map>
 #include <functional>
+#include <memory>
 
 #include "SceneEntity.hpp"
 #include "RaycastResult.hpp"
@@ -14,16 +15,21 @@ namespace RayTracer
     class Scene
     {
     public:
-      typedef std::map<unsigned int, SceneEntity*> EntityContainer;
-      typedef std::map<unsigned int, Light*> LightContainer;
+      typedef std::unique_ptr<SceneEntity> SceneEntityRef;
+      typedef std::unique_ptr<Light> LightRef;
+      
+      typedef std::map<unsigned int, SceneEntityRef> EntityContainer;
+      typedef std::map<unsigned int, LightRef> LightContainer;
     protected:
       EntityContainer entities;
       LightContainer lights;
     public:
       Scene();
     public:
-      unsigned int AddEntity(SceneEntity &entity);
-      unsigned int AddLight(Light &light);
+      unsigned int AddEntity(SceneEntityRef &&entity);
+      unsigned int AddEntity(SceneEntity *entity) { return AddEntity(std::move(SceneEntityRef(entity))); }
+      unsigned int AddLight(LightRef &&light);
+      unsigned int AddLight(Light *light) { return AddLight(std::move(LightRef(light))); }
 
       bool ExistsEntity(unsigned int entity) const;
       bool ExistsLight(unsigned int light) const;

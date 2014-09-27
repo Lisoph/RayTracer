@@ -1,5 +1,7 @@
 #include <iostream>
 #include <vector>
+#include <random>
+#include <chrono>
 
 #include <Eigen/Eigen>
 
@@ -9,116 +11,12 @@
 #include "Math.hpp"
 #include "SphereEntity.hpp"
 
-#include <omp.h>
-
 using namespace RayTracer;
 
-const int Width = 640 * 1;
-const int Height = 480 * 1;
-const double RayLength = 100.0;
+const int Width = 1920 * 4;
+const int Height = 1280 * 4;
 
 bool printDebug = false;
-
-#if 0
-struct CastResult
-{
-  Eigen::Vector3f color;
-  bool didHit;
-  Eigen::Vector3d hitPos;
-  Eigen::Vector3d newDir;
-};
-#endif
-
-#if 0
-CastResult DoIteration(Tracing::Scene &scene, const Eigen::Vector3d &rayOrigin, const Eigen::Vector3d &rayDir)
-{
-  CastResult result =
-  {
-    Eigen::Vector3f(0.0f, 0.0f, 0.0f),
-    //Eigen::Vector3f((float)rayDir(0), (float)rayDir(1), 0.0f),
-    false,
-    Eigen::Vector3d(),
-    Eigen::Vector3d()
-  };
-  
-  Eigen::Vector3d end(rayOrigin + (rayDir * RayLength));
-  
-  if(Eigen::Vector2d(end(0), end(1)).norm() < 50.0)
-  {
-    result.color = Eigen::Vector3f(1.0f, 0.0f, 1.0f);
-    result.didHit = false;
-    result.hitPos = end;
-    result.newDir = Eigen::Vector3d(0.0, 0.0, -1.0);
-  }
-  
-  return result;
-}
-#endif
-
-#if 0
-void PseudoCast(PixelBuffer &pixBuf, Tracing::Scene &scene, int numIters)
-{
-  const int HalfWidth = Width / 2;
-  const int HalfHeight = Height / 2;
-  
-  Eigen::Vector3d rayOrigin(0.0, 0.0, 0.0);
-  Eigen::Vector3d rayDir;
-  Eigen::Vector3f resultColor(0.0f, 0.0f, 0.0f);
-  
-  for(int y = 0; y < Height; ++y)
-  {
-    if(y == Height / 2) printDebug = true;
-    
-    for(int x = 0; x < Width; ++x)
-    {
-      /* Calculate first rayDir */
-      Eigen::Vector3d pixelCoord;
-      pixelCoord(0) = (double)(x - HalfWidth) / HalfWidth;
-      pixelCoord(1) = -(double)(y - HalfHeight) / HalfHeight;
-      pixelCoord(2) = 1.0;
-      
-      rayDir = (pixelCoord - rayOrigin).normalized();
-      
-      /* First iteration */
-      auto result = DoIteration(scene, rayOrigin, rayDir);
-      bool didHit = result.didHit;
-      resultColor = result.color;
-      if(result.didHit)
-      {
-        rayOrigin = result.hitPos;
-        rayDir = result.newDir;
-      }
-      else
-      {
-        rayOrigin = Eigen::Vector3d(0.0, 0.0, 0.0);
-        rayDir = (pixelCoord - rayOrigin).normalized();
-      }
-      
-      /* Other iterations */
-      int i;
-      for(i = 0; i < numIters && didHit; ++i)
-      {
-        auto result = DoIteration(scene, rayOrigin, rayDir);
-        didHit = result.didHit;
-        if(result.didHit)
-        {
-          rayOrigin = result.hitPos;
-          rayDir = result.newDir;
-          resultColor += result.color;
-        }
-        else
-        {
-          rayOrigin = Eigen::Vector3d(0.0, 0.0, 0.0);
-          rayDir = (pixelCoord - rayOrigin).normalized();
-        }
-      }
-      
-      resultColor /= (i + 1); /* Average color */
-      pixBuf.SetPixel(x, y, resultColor);
-    }
-  }
-}
-#endif
 
 Eigen::Vector3d CalculateRayStartDir(const Eigen::Vector2d &pixelPos, const Eigen::Vector2d &resolution, const Eigen::Vector3d &rayOrigin)
 {
@@ -133,46 +31,90 @@ Eigen::Vector3d CalculateRayStartDir(const Eigen::Vector2d &pixelPos, const Eige
   return (pixelPos3d - rayOrigin).normalized();
 }
 
+template <typename T>
+T RandReal(const T &min, const T &max)
+{
+  static std::default_random_engine randEngine((unsigned int)std::chrono::system_clock::now().time_since_epoch().count());
+  std::uniform_real_distribution<T> distr(min, max);
+  return distr(randEngine);
+}
+
+double SpawnRandomSpheres(Tracing::Scene &scene, int numSpheres, const Eigen::Vector3d &posMin, const Eigen::Vector3d &posMax,
+                          double radiusMin, double radiusMax)
+{
+  using SceneEntityRef = Tracing::Scene::SceneEntityRef;
+  using MaterialRef = Tracing::SceneEntity::MaterialRef;
+  
+  double avgZ = 0;
+  
+  for(int i = 0; i < numSpheres; ++i)
+  {
+    Eigen::Vector3d spherePos(RandReal<double>(posMin(0), posMax(0)), RandReal<double>(posMin(1), posMax(1)),
+                              RandReal<double>(posMin(2), posMax(2)));
+    double sphereRadius = RandReal<double>(radiusMin, radiusMax);
+    Eigen::Vector3f sphereColor(RandReal<float>(0, 1), RandReal<float>(0, 1), RandReal<float>(0, 1));
+    
+    if(i == numSpheres / 2) sphereRadius = 20;
+    avgZ += spherePos(2);
+    
+    scene.AddEntity(new Tracing::SphereEntity(spherePos, sphereRadius, MaterialRef(new Tracing::Material(sphereColor))));
+  }
+  
+  avgZ /= numSpheres;
+  return avgZ;
+}
+
+void SpawnSpherePlane(Tracing::Scene &scene, const Eigen::Vector3d &pos, double radius, int width, int height)
+{
+  using MaterialRef = Tracing::SceneEntity::MaterialRef;
+  
+  const double halfWidth = (width * radius) / 2, halfHeight = (height * radius) / 2;
+  const double halfRadius = radius / 2;
+  
+  for(int y = 0; y < height; ++y)
+  {
+    for(int x = 0; x < width; ++x)
+    {
+      double X = x * radius, Y = y * radius;
+      
+      Eigen::Vector3d spherePos = Eigen::Vector3d((X - halfWidth) + halfRadius, 0, (Y - halfHeight) + halfRadius) + pos;
+      Eigen::Vector3f sphereColor(RandReal<float>(0, 1), RandReal<float>(0, 1), RandReal<float>(0, 1));
+      
+      scene.AddEntity(new Tracing::SphereEntity(spherePos, radius, MaterialRef(new Tracing::Material(sphereColor))));
+    }
+  }
+}
+
 int main(int argc, char **argv)
 {
   PixelBuffer myImage(Width, Height);
   
   Tracing::Scene myScene;
-  const int numIters = 50; /* Maximum QUALITY Kappa */
+  const int numIters = 150; /* Maximum QUALITY Kappa */
   
   std::cout << "Casting...\n";
-
-  /* Materials */
-  Tracing::Material redMat(Eigen::Vector3f(0.6f, 0.0f, 0.0f));
-  Tracing::Material greenMat(Eigen::Vector3f(0.0f, 0.6f, 0.0f));
-  Tracing::Material blueMat(Eigen::Vector3f(0.0f, 0.0f, 0.6f));
-  Tracing::Material yellowMat(Eigen::Vector3f(0.6f, 0.6f, 0.0f)); /* Red & green = yellow, right? */
-  Tracing::Material pinkMat(Eigen::Vector3f(1.0f, 0.0f, 1.0f));
-
-  /* Entities */
-  Tracing::SphereEntity mySphere(Eigen::Vector3d(0.0, 0.0, 20.0), 10.0, redMat);
-  Tracing::SphereEntity mySphere2(Eigen::Vector3d(8.0, 0.0, 10.0), 3.0, greenMat);
-  Tracing::SphereEntity mySphere3(Eigen::Vector3d(-5.0, 5.0, 5.0), 5.0, blueMat);
-  Tracing::SphereEntity mySphere4(Eigen::Vector3d(0.0, -20.0, 15.0), 10.0, yellowMat);
-  Tracing::SphereEntity mySphere5(Eigen::Vector3d(-3.0, 0.0, 7.0), 4.0, pinkMat);
-
-  myScene.AddEntity(mySphere);
-  myScene.AddEntity(mySphere2);
-  myScene.AddEntity(mySphere3);
-  myScene.AddEntity(mySphere4);
-  myScene.AddEntity(mySphere5);
+  
+  using MaterialRef = Tracing::SceneEntity::MaterialRef;
+  
+  /* Let's add random spheres */
+  /*double avgZ = SpawnRandomSpheres(myScene, 10, Eigen::Vector3d(-30, -30, 30), Eigen::Vector3d(30, 30, 40),
+                                   5, 20);*/
+  
+  
+  SpawnSpherePlane(myScene, Eigen::Vector3d(0, -15, 30), 5, 5, 5);
+  
+  myScene.AddEntity(new Tracing::SphereEntity(Eigen::Vector3d(0, 0, 25), 10,
+                                              MaterialRef(new Tracing::Material(Eigen::Vector3f(1, 0, 0)))));
+  
+  SpawnRandomSpheres(myScene, 3, Eigen::Vector3d(-30, -25, 20), Eigen::Vector3d(30, 25, 50), 3, 3);
+  
+  double avgZ = 30;
 
   /* Lights */
-  Tracing::Light myLight(Eigen::Vector3d(0.0, 30.0, 20.0), Eigen::Vector3f(0.0f, 1.0f, 0.0f));
-  Tracing::Light myLight2(Eigen::Vector3d(0.0, 0.0, 0.0), Eigen::Vector3f(0.0f, 1.0f, 1.0f));
-
+  Tracing::Light *myLight = new Tracing::Light(Eigen::Vector3d(0, 40, avgZ), Eigen::Vector3f(1.0f, 1.0f, 1.0f));
   myScene.AddLight(myLight);
-  myScene.AddLight(myLight2);
-
-  omp_lock_t setPixelLock;
-  omp_init_lock(&setPixelLock);
-
-//#pragma omp parallel for
+  
+  /* Main loop */
   for(int y = 0; y < myImage.Height(); ++y)
   {
     for(int x = 0; x < myImage.Width(); ++x)
@@ -185,7 +127,7 @@ int main(int argc, char **argv)
       ray.Dir() = CalculateRayStartDir(Eigen::Vector2d(x, y), Eigen::Vector2d(Width, Height), ray.Origin());
       
       Tracing::RaycastResult result = myScene.CastRay(ray, Tracing::RaycastResult::NoHit());
-      if(result.ObjectHit()) pixelColor /*+*/= result.Color();
+      pixelColor = result.Color();
 
       double intensity = result.intensity;
       
@@ -195,24 +137,18 @@ int main(int argc, char **argv)
       {
         ray = result.NextCastRay();
         result = myScene.CastRay(ray, result);
-        if(result.ObjectHit()) pixelColor += result.Color() * (float)intensity;
+        if(result.ObjectHit()) pixelColor += result.Color() * /*(float)intensity*/ 0.6;
 
-        intensity += result.intensity; // Play with this
-        intensity /= 2.0f;
+        intensity *= result.intensity;
         intensity = std::max(intensity, 0.0);
       }
-
+      
       /* Average pixel color */
       pixelColor /= (float)(doneIters + 1);
 
-      //omp_set_lock(&setPixelLock);
       myImage.SetPixel(x, y, pixelColor);
-      //omp_unset_lock(&setPixelLock);
     }
   }
-
-  omp_destroy_lock(&setPixelLock);
-
   
   std::cout << "Exporting...\n";
   if(!Exporter::ExportPPM("TestTracer.ppm", myImage))
@@ -221,7 +157,5 @@ int main(int argc, char **argv)
   }
   
   std::cout << "Done\n";
-  /*char ch;
-  std::cin >> ch;*/
 }
 

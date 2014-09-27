@@ -11,20 +11,20 @@ namespace RayTracer
   namespace Tracing
   {
     Scene::Scene()
-    : entities()
+    : entities(), lights() // 10/10 error messages
     {}
     
-    unsigned int Scene::AddEntity(SceneEntity &entity)
+    unsigned int Scene::AddEntity(SceneEntityRef &&entity)
     {
       unsigned int index = (unsigned int)entities.size();
-      entities[index] = &entity;
+      entities[index] = std::move(entity);
       return index;
     }
 
-    unsigned int Scene::AddLight(Light &light)
+    unsigned int Scene::AddLight(LightRef &&light)
     {
       unsigned int index = (unsigned int)lights.size();
-      lights[index] = &light;
+      lights[index] = std::move(light);
       return index;
     }
     
@@ -63,7 +63,7 @@ namespace RayTracer
 
       for(auto &pair : entities)
       {
-        SceneEntity *ent = pair.second;
+        SceneEntity *ent = pair.second.get();
 
         if(ent->IntersectsWithRay(ray))
         {
@@ -87,6 +87,13 @@ namespace RayTracer
 
       if(hitEntity == nullptr)
         return RaycastResult::NoHit();
+      
+      if(hitEntity->LightingImmune())
+      {
+        RaycastResult res;
+        res.Color() = hitEntity->Mat()->GetColorAt(hitEntity->IntersectionPoint());
+        return res;
+      }
 
       /* So the cast ray hit something. Now we would need to check, if the hit point is visible for the lights. */
       /*
@@ -104,7 +111,7 @@ namespace RayTracer
 
       for(auto &pair : lights)
       {
-        const Light *light = pair.second;
+        const Light *light = pair.second.get();
 
         if(IsLightVisibleFrom(*light, intersPoint))
         {
@@ -120,19 +127,19 @@ namespace RayTracer
 
       if(numAffectingLights > 0)
       {
-        resultingLightingColor /= (float)numAffectingLights;
+        resultingLightingColor /= (float)numAffectingLights; // Additive blending
         totalContri /= numAffectingLights;
       }
 
       Ray newRay(ray.Length());
       newRay.Origin() = hitEntity->IntersectionPoint();
-      newRay.Dir() = hitEntity->Mat().GetReflection(hitEntity->IntersectionPoint(), ray.Dir(), *hitEntity);
+      newRay.Dir() = hitEntity->Mat()->GetReflection(hitEntity->IntersectionPoint(), ray.Dir(), *hitEntity);
 
       /*Eigen::Vector3f resultColor = hitEntity->Mat().GetColorAt(hitEntity->IntersectionPoint());
       resultColor += resultingLightingColor;*/
 
       Eigen::Vector3f resultColor = Eigen::Vector3f::Zero();
-      Eigen::Vector3f matColor = hitEntity->Mat().GetColorAt(hitEntity->IntersectionPoint());
+      Eigen::Vector3f matColor = hitEntity->Mat()->GetColorAt(hitEntity->IntersectionPoint());
       if(numAffectingLights > 0)
       {
         //resultColor = matColor * resultingLightingColor; // WTF Eigen
@@ -143,10 +150,15 @@ namespace RayTracer
         resultColor = matColor * 0.4f + resultingLightingColor * 0.6f;
         resultColor /= 2.0f;
       }
-      else
+      else /* In shadow ?? */
       {
-        resultColor = matColor * 0.04f + resultingLightingColor * 0.06f;
+        //resultColor = matColor * 0.04f + resultingLightingColor * 0.06f;
         //resultColor /= 2.0f;
+        
+        resultColor = matColor * 0.4f + resultingLightingColor * 0.6f;
+        resultColor /= 2.0f;
+        
+        //resultColor = Eigen::Vector3f(1, 0, 0);
       }
 
       auto rcres = RaycastResult(newRay, resultColor);
@@ -169,7 +181,10 @@ namespace RayTracer
 
       for(auto &pair : entities)
       {
-        SceneEntity *ent = pair.second;
+        SceneEntity *ent = pair.second.get();
+        
+        if(ent->LightingImmune()) continue;
+        
         if(ent->IntersectsWithRay(ray))
         {
           hitEntity = true;

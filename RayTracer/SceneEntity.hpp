@@ -1,5 +1,7 @@
 #pragma once
 
+#include <memory>
+
 #include <Eigen/Eigen>
 
 #include "Material.hpp"
@@ -11,10 +13,13 @@ namespace RayTracer
   {
     class SceneEntity
     {
+    public:
+      typedef std::unique_ptr<Material> MaterialRef;
     protected:
       Eigen::Vector3d pos, rot;
-      Material &mat;
+      MaterialRef mat;
       Eigen::Vector3d intersectionPoint;
+      bool lightingImmune;
     public:
       const Eigen::Vector3d &Pos() const { return pos; }
       Eigen::Vector3d &Pos() { return pos; }
@@ -22,18 +27,21 @@ namespace RayTracer
       const Eigen::Vector3d &Rot() const { return rot; }
       Eigen::Vector3d &Rot() { return rot; }
       
-      const Material &Mat() const { return mat; }
-      Material &Mat() { return mat; }
+      const MaterialRef &Mat() const { return mat; }
+      MaterialRef &Mat() { return mat; }
 
       const Eigen::Vector3d &IntersectionPoint() const { return intersectionPoint; }
+      
+      bool LightingImmune() const { return lightingImmune; }
+      void LightingImmune(bool l) { lightingImmune = l; }
     public:
       SceneEntity();
       SceneEntity(const SceneEntity &other);
       SceneEntity(const Eigen::Vector3d &pos);
       SceneEntity(const Eigen::Vector3d &pos, const Eigen::Vector3d &rot);
-      SceneEntity(Material &mat);
+      SceneEntity(MaterialRef &&mat);
       SceneEntity(const Eigen::Vector3d &pos, const Eigen::Vector3d &rot,
-                  Material &mat);
+                  MaterialRef &&mat);
       virtual ~SceneEntity();
       
       SceneEntity &operator = (const SceneEntity &rhs);

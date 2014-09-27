@@ -12,9 +12,10 @@ namespace RayTracer
       : objectHit(true), nextCastRay(nextCastRay), color(color)
     {}
     
-    const RaycastResult &RaycastResult::NoHit()
+    const RaycastResult RaycastResult::NoHit()
     {
-      static RaycastResult res;
+      RaycastResult res;
+      res.Color() = Eigen::Vector3f(0.2f, 0.4f, 0.8f);
       return res;
     }
   }
